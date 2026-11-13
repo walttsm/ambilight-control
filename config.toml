@@ -1,0 +1,80 @@
+﻿# Ambilight configuration (shared by the Python prototype and the future native version)
+
+[layout]
+# Edges in the order the strip physically runs, starting at LED #1.
+# Directions are as seen from the FRONT of the monitor.
+#   right_up / right_down, left_up / left_down, top_ltr / top_rtl, bottom_ltr / bottom_rtl
+edges = [
+  { side = "right_up",  leds = 15 },
+  { side = "top_rtl",   leds = 41 },
+  { side = "left_down", leds = 15 },
+]
+
+[capture]
+monitor = '\\.\DISPLAY1'   # Windows display name (3440x1440 primary)
+target_fps = 30            # upper limit on processed frames per second. Each frame costs ~0.8 ms
+                           # (capture) + ~0.5 ms (USB) of CPU inside Windows/drivers; with smoothing,
+                           # 30 looks the same as 60 for ambient light. Raise it if motion looks steppy.
+mip_level = 4              # GPU downscale: each level halves width & height.
+                           # 4 -> 3440x1440 becomes 215x90 (each pixel = average of a 16x16 block)
+                           # 3 -> 430x180: 4x more CPU work for no visible gain with 71 LEDs
+
+[zones]
+depth = 0.12           # how far into the screen each edge zone reaches
+                       # (fraction of the dimension perpendicular to that edge)
+
+[bars]
+enabled = true         # detect pillarbox/letterbox bars and sample the real picture's edges
+# A screen column/row is a "bar" when it is dim AND flat (players paint dim gradients into bars):
+bar_max = 40           # mean of max(R,G,B) along the line must be below this (0..255)
+flat_std = 12          # ...and its standard deviation along the line below this
+settle_s = 1.0         # new bars must be stable this long before cropping (ignores fades to black)
+
+[color]
+led_gamma = 1.6        # 1.0 = send linear light (physically matches the screen)
+                       # 2.2 = send gamma-encoded values like SyncLight (brighter darks, washed out)
+saturation = 1.0       # 1.0 = unchanged, >1 more vivid (applied in linear light)
+brightness = 1.0       # global brightness, 0..1
+white_balance = [1.0, 1.0, 1.0]   # per-channel multipliers (R, G, B); tune against a white screen
+min_brightness = 2     # 0..255: final values at/below this become 0 (stops faint flicker)
+
+[power]
+# The strip is powered by USB. Estimated current each frame:
+#   controller_ma + leds * idle_ma_per_led + sum(value/255 * ma_per_channel)
+# If over usb_budget_ma, ALL LEDs are dimmed equally (hues stay correct).
+# Defaults are conservative estimates; measure with a USB power meter and adjust.
+usb_budget_ma = 450      # USB 2.0 port spec is 500 mA (this is a USB 2.0 device); 10% margin
+ma_per_channel = 20      # WS2812B-class LED, one color channel at full brightness (worst case)
+idle_ma_per_led = 1      # each LED's driver chip draws ~1 mA even when dark
+controller_ma = 30       # the USB controller board itself
+
+[smoothing]
+time_constant_ms = 60  # exponential smoothing; 0 = off. Higher = calmer but laggier
+keepalive_hz = 5       # when the screen is static, resend this often so the firmware stays in sync mode
+send_threshold = 1     # skip a USB send unless some channel changed by MORE than this (0..255 steps)
+
+[activity]
+# Detects game / video / desktop to pick the settings profile below.
+# LEDs start OFF, turn ON when a full-screen game or full-screen video starts (not for media in a
+# window or background tab), and turn OFF when there has been none for off_delay_s.
+enabled = true         # false = no detection: LEDs start on, always the base settings
+off_delay_s = 120      # seconds without a full-screen game/video before auto-off (alt-tab safe)
+hotkey = "ctrl+alt+l"  # toggles the LEDs on/off at any time (e.g. on for the desktop)
+# Full-screen apps that are video, not games:
+video_players = ["vlc.exe", "mpv.exe", "mpc-hc64.exe", "mpc-be64.exe", "PotPlayerMini64.exe",
+                 "Video.UI.exe", "Microsoft.Media.Player.exe"]
+# Browsers count as video only while a media session is playing (not just for being full screen):
+browsers = ["brave.exe", "chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "vivaldi.exe"]
+# Full-screen apps that are neither games nor video:
+not_games = ["explorer.exe", "Code.exe", "WindowsTerminal.exe"]
+# Media sessions from these (substring of the app id, case-insensitive) are music, not video:
+audio_apps = ["spotify"]
+
+# Per-activity overrides of any setting above (tables merge into the base settings).
+[profiles.game]
+bars = { enabled = false }              # game scenery/vignettes were mistaken for black bars
+smoothing = { time_constant_ms = 40 }   # snappier
+
+[profiles.video]
+bars = { enabled = true }
+smoothing = { time_constant_ms = 100 }  # calmer, cinema-like

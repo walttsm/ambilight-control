@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ambilight Calibration</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #000; font: 14px/1.4 system-ui, sans-serif; }
+  #swatch { position: fixed; inset: 0; transition: background-color .15s; cursor: pointer; }
+  /* Corner patch mode: only the top-left corner is colored, so only ~13 LEDs light up and the
+     USB current limit dims them far less. A corner (not a centered patch) so the black-bar
+     detector doesn't mistake the black area for video bars. */
+  body.patch #swatch { right: 80%; bottom: 70%; }
+  #label {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    padding: 10px 16px; border-radius: 8px; background: rgba(0,0,0,.55); color: #fff;
+    text-align: center; pointer-events: none; max-width: calc(100vw - 32px);
+  }
+  #label b { font-size: 20px; display: block; }
+  #label small { opacity: .75; }
+</style>
+</head>
+<body>
+<div id="swatch" title="Click or press Space / arrow keys"></div>
+<div id="label"></div>
+<script>
+// Full-screen color swatches for comparing the LED strip against the screen.
+// Press F11 for browser full screen. Click / Space / Right arrow = next, Left arrow = previous.
+// The label stays in the CENTER, so it doesn't affect the edge zones the LEDs sample.
+const swatches = [
+  ["White",       "#ffffff", "Tune white_balance until the strip looks neutral white"],
+  ["Grey 50%",    "#808080", "Should look like a dimmer neutral white"],
+  ["Orange",      "#ffa500", "Reported: looked red. Too red = green too weak"],
+  ["Magenta",     "#ff00ff", "Reported: looked purple. Too purple = blue too strong vs red"],
+  ["Yellow",      "#ffff00", "Too orange = green weak; too green = red weak"],
+  ["Skin tone",   "#e0ac69", "A sensitive real-world check"],
+  ["Red",         "#ff0000", ""],
+  ["Green",       "#00ff00", ""],
+  ["Blue",        "#0000ff", ""],
+  ["Cyan",        "#00ffff", "Too blue = green weak vs blue"],
+  ["Dark grey",   "#303030", "Checks led_gamma: should be dim, not off, not bright"],
+];
+let i = 0;
+const sw = document.getElementById("swatch"), lb = document.getElementById("label");
+function show() {
+  const [name, hex, hint] = swatches[i];
+  sw.style.backgroundColor = hex;
+  const mode = document.body.classList.contains("patch") ? "corner patch" : "full screen";
+  lb.innerHTML = `<b>${i + 1}/${swatches.length} · ${name}</b>${hex} · ${mode}` +
+    `${hint ? `<br><small>${hint}</small>` : ""}<br><small>Click/Space: next · ←: back · P: patch/full</small>`;
+}
+document.body.classList.add("patch");
+function step(d) { i = (i + d + swatches.length) % swatches.length; show(); }
+sw.addEventListener("click", () => step(1));
+addEventListener("click", e => { if (e.target === document.body || e.target === document.documentElement) step(1); });
+addEventListener("keydown", e => {
+  if (e.key === " " || e.key === "ArrowRight") { step(1); e.preventDefault(); }
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "p" || e.key === "P") { document.body.classList.toggle("patch"); show(); }
+});
+show();
+</script>
+</body>
+</html>

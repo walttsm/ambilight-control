@@ -1,0 +1,10 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime output
+*.log
+run.err
+prof.txt
+debug_bars/

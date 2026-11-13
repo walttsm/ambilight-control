@@ -1,0 +1,12 @@
+# Runtime (python -m ambilight.main)
+hidapi==0.15.0
+numpy==2.5.4
+winrt-runtime==4.1.0
+winrt-Windows.Foundation==4!10.0.28000.2957
+winrt-Windows.Foundation.Collections==4!10.0.28000.2957
+winrt-Windows.Media.Control==4!10.0.28000.2957
+
+# Tools only (benchmarks / profiling in tools/)
+dxcam==0.3.0
+comtypes==1.5.0
+py-spy==0.4.3
