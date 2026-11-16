@@ -1,4 +1,4 @@
-﻿"""Lesson 7: profile each stage of the loop separately: wall time AND CPU time.
+"""Lesson 7: profile each stage of the loop separately: wall time AND CPU time.
 
 Wall time = how long the call took. CPU time = how long this thread actually computed.
 The difference is waiting (GPU, USB, sleeping). Waiting blocks the loop but costs no CPU.
@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT))
 from ambilight.color import ColorPipeline  # noqa: E402
 from ambilight.zones import ZoneSampler  # noqa: E402
 
-cfg = tomllib.loads((ROOT / "config.toml").read_text())
+cfg = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8-sig"))
 cam = dxcam.create(output_idx=0, output_color="BGRA")
 z = ZoneSampler(cam.width, cam.height, cfg["layout"]["edges"], cfg["zones"]["depth"],
                 cfg["capture"]["subsample"])

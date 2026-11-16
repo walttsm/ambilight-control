@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from ambilight.strip import Strip  # noqa: E402
 
-cfg = tomllib.loads((ROOT / "config.toml").read_text())
+cfg = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8-sig"))
 palette = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 160, 0)]
 
 with Strip() as s:

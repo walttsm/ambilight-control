@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 from ambilight.bars import BarDetector  # noqa: E402
 from ambilight.capture_gpu import GpuCapture  # noqa: E402
 
-cap = GpuCapture(r"\\.\DISPLAY1", 3)
+cap = GpuCapture("primary", 3)
 f, t = None, time.time()
 while f is None and time.time() - t < 5:
     f = cap.next_frame(200)

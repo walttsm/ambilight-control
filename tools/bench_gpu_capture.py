@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ambilight.capture_gpu import GpuCapture  # noqa: E402
 
 level = int(sys.argv[1]) if len(sys.argv) > 1 else 3
-cap = GpuCapture(r"\\.\DISPLAY1", mip_level=level)
+cap = GpuCapture("primary", mip_level=level)
 print(f"monitor {cap.width}x{cap.height} rotation={cap.rotation} -> mip {level}: "
       f"{cap.out_w}x{cap.out_h} = {cap.out_w * cap.out_h * 4 / 1024:.0f} KB per frame")
 

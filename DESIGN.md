@@ -236,6 +236,14 @@ Pitfalls:
    use it (`tools/cycles.py`) for per-call costs, and whole-process CPU time for totals.
 10. Bar detection costs ~1 ms per frame in numpy at 430x180; run it at 10 Hz (formats change slowly).
 11. A 144 Hz game produces ~136 new frames/s; always cap processing (`target_fps`).
+12. **DPI awareness** (found when moving to a 4K monitor at 150% scaling): a non-DPI-aware process
+    gets *scaled* coordinates (`DesktopCoordinates` = 2560x1440) while the duplicated texture is
+    3840x2160 → wrong texture sizes, failed copies. Call `SetProcessDpiAwarenessContext(
+    PER_MONITOR_AWARE_V2)` first thing (or in the native app's manifest). Also fixes window rects
+    used by activity detection.
+13. **Display names are not stable**: swapping monitors renumbered `\\.\DISPLAY1/2`. Default to
+    `monitor = "primary"` (the output whose desktop origin is 0,0).
+14. Any code that reads `config.toml` must accept a UTF-8 BOM (tools included).
 
 ---
 
@@ -248,8 +256,12 @@ Pitfalls:
       (corner-patch mode) and tune `white_balance` (less blue if magenta looks purple).
 - [ ] Measure real strip current → set `[power] ma_per_channel`.
 - [ ] Rotated monitors (`Rotation` 2/3/4) not supported.
-- [ ] HDR: `DuplicateOutput` returns SDR-converted BGRA8. For HDR-accurate colors use
-      `IDXGIOutput5::DuplicateOutput1` with `R16G16B16A16_FLOAT` and tone-map.
+- [ ] HDR (now relevant: new 4K monitor runs HDR, PQ/Rec.2020, 630 nits; check with
+      `tools/monitor_info.py`): `DuplicateOutput` returns an SDR-converted BGRA8 image (may look dim
+      or washed out). For accurate colors use `IDXGIOutput5::DuplicateOutput1` with
+      `R16G16B16A16_FLOAT` (scRGB, linear; GenerateMips then averages linear light natively),
+      divide by the SDR white level (`DisplayConfigGetDeviceInfo`, SDR_WHITE_LEVEL / 1000 × 80 nits),
+      clip/tone-map highlights, then continue the existing pipeline.
 - [ ] Possible: merge equal adjacent LEDs into one segment; temporal dithering for low values.
 - [ ] Optional safety check: lower `usb_budget_ma` automatically when the strip is behind a
       bus-powered hub (100 mA/port). `tools/usb_port_info.py` shows the hub IOCTLs; on this PC the

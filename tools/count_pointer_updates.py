@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ambilight import capture_gpu as cg  # noqa: E402
 
-cap = cg.GpuCapture(r"\\.\DISPLAY1", 3)
+cap = cg.GpuCapture("primary", 3)
 real = pointer = timeouts = 0
 end = time.perf_counter() + 5
 while time.perf_counter() < end:

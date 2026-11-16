@@ -46,6 +46,6 @@ with Strip() as s:
     frame = np.full((s.led_count, 3), 10, np.uint8)
     cost("Strip.send (6 HID reports)", lambda: s.send(frame), 100)
 cost("time.sleep(0.016)", lambda: time.sleep(0.016), 50)
-cap = GpuCapture(r"\\.\DISPLAY1", 4)
+cap = GpuCapture("primary", 4)
 cost("next_frame(20 ms timeout)", lambda: cap.next_frame(20), 100)
 cap.close()

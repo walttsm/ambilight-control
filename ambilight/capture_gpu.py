@@ -28,6 +28,16 @@ import numpy as np
 
 HRESULT = C.c_long
 
+# DPI awareness. Without it, Windows gives this process *scaled* coordinates on monitors with
+# display scaling (a 3840x2160 monitor at 150% looks like 2560x1440), while the duplicated desktop
+# texture is always in real pixels -> wrong texture sizes and wrong window/monitor geometry.
+# Per-monitor-aware v2 (-4) makes every API report physical pixels. Must run before any window/
+# monitor query, so it happens at import time. Fails harmlessly if already set.
+try:
+    C.windll.user32.SetProcessDpiAwarenessContext(C.c_void_p(-4))
+except (AttributeError, OSError):
+    pass
+
 # --- vtable indices -----------------------------------------------------------------------------
 QUERY_INTERFACE, RELEASE = 0, 2
 FACTORY1_ENUM_ADAPTERS1 = 12          # IDXGIFactory1::EnumAdapters1
@@ -131,7 +141,7 @@ def _release(obj: C.c_void_p | None) -> None:
 class GpuCapture:
     """Captures one monitor and returns a small (h, w, 4) BGRA uint8 array per new frame."""
 
-    def __init__(self, display_name: str = r"\\.\DISPLAY1", mip_level: int = 3):
+    def __init__(self, display_name: str = "primary", mip_level: int = 3):
         self.display_name = display_name
         self.mip_level = mip_level
         self.protected = False      # last frame had DRM-protected content masked out
@@ -166,7 +176,12 @@ class GpuCapture:
                 _check(hr, "EnumOutputs")
                 desc = DXGI_OUTPUT_DESC()
                 _method(o, OUTPUT_GET_DESC, HRESULT, C.POINTER(DXGI_OUTPUT_DESC))(o, C.byref(desc))
-                if desc.DeviceName == self.display_name:
+                # "primary": the monitor at desktop origin (0,0). Display names (DISPLAY1/2...)
+                # get reshuffled when monitors are swapped; "primary" follows Windows' setting.
+                rc = desc.DesktopCoordinates
+                is_primary = desc.AttachedToDesktop and rc.left == 0 and rc.top == 0
+                if (self.display_name.lower() == "primary" and is_primary) or \
+                        desc.DeviceName == self.display_name:
                     adapter, output, self.desc = a, o, desc
                     break
                 _release(o)

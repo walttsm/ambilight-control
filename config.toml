@@ -11,7 +11,8 @@ edges = [
 ]
 
 [capture]
-monitor = '\\.\DISPLAY1'   # Windows display name (3440x1440 primary)
+monitor = "primary"        # "primary" = Windows' primary monitor (follows monitor swaps), or a
+                           # display name like '\\.\DISPLAY2' (names change when monitors change)
 target_fps = 30            # upper limit on processed frames per second. Each frame costs ~0.8 ms
                            # (capture) + ~0.5 ms (USB) of CPU inside Windows/drivers; with smoothing,
                            # 30 looks the same as 60 for ambient light. Raise it if motion looks steppy.

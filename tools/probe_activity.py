@@ -57,7 +57,7 @@ print(f"2. foreground window  : {process_name(pid.value)}  \"{title.value[:60]}\
 print(f"   covers its monitor : {covers}  (window {r.right - r.left}x{r.bottom - r.top}, "
       f"monitor {m.right - m.left}x{m.bottom - m.top})")
 
-cap = GpuCapture(r"\\.\DISPLAY1", 4)
+cap = GpuCapture("primary", 4)
 masked = frames = 0
 end = time.perf_counter() + 2
 while time.perf_counter() < end:

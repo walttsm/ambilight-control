@@ -33,7 +33,7 @@ def save_png(path: Path, bgra: np.ndarray) -> None:
 
 
 seconds = float(sys.argv[1]) if len(sys.argv) > 1 else 40
-cap = GpuCapture(r"\\.\DISPLAY1", 3)
+cap = GpuCapture("primary", 3)
 det = BarDetector()
 log = open(OUT / "log.txt", "w")
 t0 = time.perf_counter()
