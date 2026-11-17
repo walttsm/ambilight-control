@@ -66,8 +66,8 @@ class BarDetector:
 
     def update(self, frame_bgra: np.ndarray) -> tuple[int, int, int, int]:
         h, w = frame_bgra.shape[:2]
-        if self.crop is None or self.crop[2] > w or self.crop[3] > h:
-            self.crop = (0, 0, w, h)
+        if self.crop is None or getattr(self, "_size", None) != (w, h):   # first frame / new size
+            self.crop, self._size, self._candidate = (0, 0, w, h), (w, h), None
         now = time.monotonic()
         if now - self._last_measure < self.interval_s:
             return self.crop                   # ~1 ms of numpy per measurement: 10x/s is plenty

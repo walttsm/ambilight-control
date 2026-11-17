@@ -38,4 +38,7 @@ if hr >= 0:
     print(f"color: {COLOR_SPACES.get(d.ColorSpace, d.ColorSpace)}, {d.BitsPerColor} bits/channel, "
           f"peak {d.MaxLuminance:.0f} nits")
     cg._release(o6)
+from ambilight.hdr import sdr_white_nits  # noqa: E402
+print(f"SDR white level (Settings > HDR > SDR content brightness): "
+      f"{sdr_white_nits(cap.desc.DeviceName)} nits")
 cap.close()

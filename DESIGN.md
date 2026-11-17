@@ -176,7 +176,33 @@ Activity detection also selects the settings profile. Polled once per second on 
   re-registered each time). Off state: ~0.3% CPU, strip at idle draw.
 * Native version: replace with a tray icon (on/off, open config, quit) and the same behaviour.
 
-### 3.8 Loop & threading: `ambilight/main.py`, `ambilight/strip.py`
+### 3.8 Display changes: `ambilight/capture_gpu.py` (recovery)
+See pitfall 15. Native port: same three layers (full rebuild on ACCESS_LOST/any capture error with
+0.5 s retry; `IsCurrent()` + desktop texture size/format check; rebuild after 10 s without
+frames), and log every rebuild with its reason. Verify with `tools/test_capture_recovery.py`
+while toggling HDR (Win+Alt+B).
+
+### 3.9 HDR capture: `ambilight/capture_gpu.py`, `ambilight/hdr.py`
+When Windows HDR is on (`IDXGIOutput6::GetDesc1().ColorSpace == 12`, PQ/Rec.2020):
+1. `IDXGIOutput5::DuplicateOutput1(device, 0, 1, [R16G16B16A16_FLOAT])`: the desktop as
+   **scRGB** (linear, Rec.709 primaries, 1.0 = 80 nits, highlights > 1, out-of-gamut < 0).
+   Requires per-monitor DPI awareness (already set). vtable: Output5 index 26, Output6 GetDesc1 27.
+2. Mip texture, SRV and staging all `R16G16B16A16_FLOAT` (no sRGB view needed: already linear,
+   so `GenerateMips` averages light correctly). Readback = 8 bytes/pixel (240x135 → 253 KB).
+3. Reference white: `hdr_white_nits` or, if 0, Windows' SDR white level via
+   `QueryDisplayConfig` → match source GDI name (`GET_SOURCE_NAME`, type 1) → target
+   `GET_SDR_WHITE_LEVEL` (type 11): nits = SDRWhiteLevel / 1000 × 80. Re-read once per second
+   (the "SDR content brightness" slider does not reset the display). User's monitor: 320 nits.
+4. Per pixel: × 80 / white_nits; clip < 0; if max channel > 1 divide the pixel by it (hue-
+   preserving highlight compression); then (Python) sRGB-encode to BGRA8 and reuse the SDR
+   pipeline. **Native: skip the re-encode** and feed the linear values straight into zone
+   averaging (the sRGB round trip only exists to keep the Python pipeline unchanged).
+5. Desktop format is checked each frame (`R16G16B16A16_FLOAT` in HDR, `B8G8R8A8_UNORM` in SDR);
+   a mismatch triggers a rebuild, so HDR flips are caught even if `IsCurrent()` stays true.
+Config: `[capture] hdr = "auto" | "off"`, `hdr_white_nits` (0 = SDR white level); both apply
+live and can be overridden per profile (e.g. brighter for games).
+
+### 3.10 Loop & threading: `ambilight/main.py`, `ambilight/strip.py`
 * Wait inside `AcquireNextFrame`: `frame_period` while animating, up to the keepalive deadline when settled.
 * Never loop faster than `target_fps` (default 30; sleep the remainder unconditionally).
 * Send only if some channel changed by more than `send_threshold` (1) or keepalive due.
@@ -244,6 +270,24 @@ Pitfalls:
 13. **Display names are not stable**: swapping monitors renumbered `\\.\DISPLAY1/2`. Default to
     `monitor = "primary"` (the output whose desktop origin is 0,0).
 14. Any code that reads `config.toml` must accept a UTF-8 BOM (tools included).
+15. **Display mode changes (HDR toggle, resolution, driver reset) silently kill a half-recovered
+    capture.** Re-opening only the duplication on the old device/output "succeeded" but then
+    `AcquireNextFrame` timed out forever → frozen LEDs, no error logged. Fix (verified with
+    Win+Alt+B toggles, `tools/test_capture_recovery.py`): on ACCESS_LOST or any capture error,
+    release and rebuild EVERYTHING (factory, adapter, output, device, textures, duplication),
+    retrying every 0.5 s while the display is mid-switch; poll `IDXGIFactory1::IsCurrent()` once
+    per second (it goes false several times during a switch); compare the desktop texture size
+    each frame; and rebuild if no frame arrived for 10 s (harmless on a static screen: the first
+    frame after a rebuild is always delivered). Recovery takes ~1-2 s.
+16. **HDR, measured properly:** an early "HDR capture is half as bright" reading compared
+    *different* screen content and was wrong. Same frame, both paths (`tools/compare_hdr.py`):
+    Windows' `DuplicateOutput` HDR→SDR conversion maps ~80 nits to full white and clips above it
+    (mean 93, highlights flat white); the FP16 path normalized to the SDR white level (320 nits)
+    gave mean 47 with highlight colors intact. Which looks right is subjective, hence the live
+    `hdr_white_nits` setting (also per profile). Always compare on identical content.
+17. HDR path cost (Python, 30 fps): +5% of one core vs SDR (8.4% → 13.3%): ~3.3% is the numpy
+    scRGB→sRGB conversion (1.1 ms/frame), the rest the driver handling FP16. A "vectorized" numpy
+    rewrite was slower (1.4 ms). Natively the conversion is ~free, or do it on the GPU.
 
 ---
 
@@ -256,12 +300,7 @@ Pitfalls:
       (corner-patch mode) and tune `white_balance` (less blue if magenta looks purple).
 - [ ] Measure real strip current → set `[power] ma_per_channel`.
 - [ ] Rotated monitors (`Rotation` 2/3/4) not supported.
-- [ ] HDR (now relevant: new 4K monitor runs HDR, PQ/Rec.2020, 630 nits; check with
-      `tools/monitor_info.py`): `DuplicateOutput` returns an SDR-converted BGRA8 image (may look dim
-      or washed out). For accurate colors use `IDXGIOutput5::DuplicateOutput1` with
-      `R16G16B16A16_FLOAT` (scRGB, linear; GenerateMips then averages linear light natively),
-      divide by the SDR white level (`DisplayConfigGetDeviceInfo`, SDR_WHITE_LEVEL / 1000 × 80 nits),
-      clip/tone-map highlights, then continue the existing pipeline.
+- [x] HDR capture implemented (see §3.9). Pick the default `hdr_white_nits` by eye.
 - [ ] Possible: merge equal adjacent LEDs into one segment; temporal dithering for low values.
 - [ ] Optional safety check: lower `usb_budget_ma` automatically when the strip is behind a
       bus-powered hub (100 mA/port). `tools/usb_port_info.py` shows the hub IOCTLs; on this PC the
@@ -283,7 +322,8 @@ Module map (mirror the Python files):
 |---|---|
 | `strip.py` | HID open by VID/PID/interface 0, info query, `SC` packet builder, chunking, power backstop |
 | `strip.AsyncSender` | sender thread + one-slot mailbox (Rust: `Mutex<Option<Frame>>` + `Condvar`) |
-| `capture_gpu.py` | DXGI duplication + mips + staging readback; ACCESS_LOST recovery; pointer-only filter |
+| `capture_gpu.py` | DXGI duplication + mips + staging readback; full-rebuild recovery (§3.8); pointer-only filter; HDR FP16 path (§3.9); per-monitor DPI awareness |
+| `hdr.py` | SDR white level (DisplayConfig), scRGB → LED-linear conversion |
 | `zones.py` | precompute per-LED rectangles per crop size; sum in linear light (plain loops) |
 | `bars.py` | dim-and-flat line test, hysteresis state machine |
 | `color.py`, `power.py` | per-LED float math, EMA, gamma encode, mA limit |

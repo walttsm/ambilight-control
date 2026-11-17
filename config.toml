@@ -16,6 +16,12 @@ monitor = "primary"        # "primary" = Windows' primary monitor (follows monit
 target_fps = 30            # upper limit on processed frames per second. Each frame costs ~0.8 ms
                            # (capture) + ~0.5 ms (USB) of CPU inside Windows/drivers; with smoothing,
                            # 30 looks the same as 60 for ambient light. Raise it if motion looks steppy.
+hdr = "auto"               # "auto": when Windows HDR is on, capture the real HDR (FP16) image.
+                           # "off": use Windows' own HDR->SDR conversion (clips at ~80 nits:
+                           #        brighter darks, but highlights turn flat white)
+hdr_white_nits = 0         # HDR only: brightness that maps to full LED. 0 = Windows' "SDR content
+                           # brightness" (desktop white). Lower = brighter LEDs in HDR games.
+                           # Can be overridden per profile, e.g. [profiles.game] capture = {...}
 mip_level = 4              # GPU downscale: each level halves width & height.
                            # 4 -> 3440x1440 becomes 215x90 (each pixel = average of a 16x16 block)
                            # 3 -> 430x180: 4x more CPU work for no visible gain with 71 LEDs

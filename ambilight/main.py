@@ -109,7 +109,8 @@ def _run(args, persist: dict, cleanup: list) -> None:
     cfg_mtime = cfg_path.stat().st_mtime
 
     cc = base_cfg["capture"]                              # [capture]/[layout]: restart to change
-    cap = GpuCapture(cc["monitor"], cc["mip_level"])
+    cap = GpuCapture(cc["monitor"], cc["mip_level"], hdr=cc.get("hdr", "auto"),
+                     hdr_white_nits=cc.get("hdr_white_nits", 0))
     cleanup.append(cap.close)
     r = cap.desc.DesktopCoordinates
     edges = base_cfg["layout"]["edges"]
@@ -139,6 +140,13 @@ def _run(args, persist: dict, cleanup: list) -> None:
         samplers.clear()                                  # zone depth may differ per profile
         frame_period = 1.0 / eff["capture"]["target_fps"]
         keepalive = 1.0 / eff["smoothing"]["keepalive_hz"]
+        # HDR settings apply live (also per profile): white level is read every second by the
+        # capture; switching hdr auto/off needs a capture rebuild.
+        cap.hdr_white_nits = eff["capture"].get("hdr_white_nits", 0)
+        new_mode = eff["capture"].get("hdr", "auto")
+        if new_mode != cap.hdr_mode:
+            cap.hdr_mode = new_mode
+            cap._rebuild(f"hdr = {new_mode}")
 
     def sampler_for(w: int, h: int) -> ZoneSampler:
         """Zone geometry depends on the (cropped) frame size; build once per size and cache."""
@@ -171,8 +179,8 @@ def _run(args, persist: dict, cleanup: list) -> None:
         n = pipeline.led_count
         if n != strip.led_count:
             print(f"warning: config has {n} LEDs, device reports {strip.led_count}")
-        print(f"capturing {cap.width}x{cap.height} (GPU-downscaled to {cap.out_w}x{cap.out_h}) "
-              f"-> {n} LEDs, fw {strip.info['firmware']}. Ctrl+C to stop.")
+        print(f"capturing {cap.width}x{cap.height} {cap.mode_text} (GPU-downscaled to "
+              f"{cap.out_w}x{cap.out_h}) -> {n} LEDs, fw {strip.info['firmware']}. Ctrl+C to stop.")
 
         sender = AsyncSender(strip)
         black = np.zeros((n, 3), np.float32)
@@ -184,6 +192,7 @@ def _run(args, persist: dict, cleanup: list) -> None:
         t_cfg_check = t_prev
         last_mode = None
         was_lit = False
+        seen_rebuilds = cap.rebuilds
         try:
             while True:
                 t_loop = time.perf_counter()
@@ -235,6 +244,12 @@ def _run(args, persist: dict, cleanup: list) -> None:
                     settled = pipeline.settled(target) and not bars.pending
                     wait = keepalive - (t_loop - t_sent) if settled else frame_period
                     frame = cap.next_frame(max(1, int(wait * 1000)))
+                    if cap.rebuilds != seen_rebuilds:    # display changed: monitor may differ
+                        seen_rebuilds = cap.rebuilds
+                        last_frame = None                # old buffer is gone / other size
+                        rc = cap.desc.DesktopCoordinates
+                        if activity:
+                            activity.monitor_rect = (rc.left, rc.top, rc.right, rc.bottom)
                     if frame is not None:
                         last_frame = frame
                     elif bars.pending or not was_lit:
