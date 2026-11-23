@@ -8,3 +8,4 @@ __pycache__/
 run.err
 prof.txt
 debug_bars/
+state.json

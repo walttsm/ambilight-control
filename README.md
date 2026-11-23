@@ -19,8 +19,8 @@ cd C:\Users\waltm\ambilight
 ```
 Ctrl+C stops it and turns the LEDs off. Most `config.toml` settings apply live when you save the file.
 
-The LEDs start off, turn on automatically when a full-screen game or full-screen video starts,
-and turn off 2 minutes after it ends. **Ctrl+Alt+L** toggles them on/off at any time.
+**Ctrl+Alt+L** turns the LEDs on/off. That's the only on/off control; the last state is
+restored when the program starts. Games and videos are detected only to pick matching settings.
 
 ## Autostart
 A shortcut in the Startup folder starts it invisibly at logon:

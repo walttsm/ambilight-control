@@ -3,10 +3,8 @@
     capture (DXGI + GPU mips) -> bars -> zones (linear average per LED)
     -> color (adjust, smooth, encode, USB current limit) -> strip (HID, own thread)
 
-On/off: the LEDs start off, turn on automatically when a full-screen game or full-screen video
-starts, and off a few seconds after it ends; a global hotkey (default Ctrl+Alt+L) toggles them
-at any time.
-Activity detection (ambilight/activity.py: game / video / desktop) also selects the settings
+On/off: only the global hotkey (default Ctrl+Alt+L); the last state is restored at startup.
+Activity detection (ambilight/activity.py: game / video / desktop) only selects the settings
 profile: [profiles.game] / [profiles.video] in config.toml override the base settings.
 
 Run:  .venv\\Scripts\\python.exe -m ambilight.main [--stats]
@@ -22,6 +20,7 @@ from __future__ import annotations
 import argparse
 import copy
 import ctypes
+import json
 import sys
 import threading
 import time
@@ -45,6 +44,24 @@ ROOT = Path(__file__).resolve().parents[1]
 def load_config(path: Path) -> dict:
     # utf-8-sig: accept UTF-8 with or without a BOM (Windows PowerShell 5 / Notepad may add one)
     return tomllib.loads(path.read_text(encoding="utf-8-sig"))
+
+
+STATE_FILE = ROOT / "state.json"
+
+
+def load_lights_state() -> bool:
+    """Last on/off state chosen with the hotkey (survives reboots). Default: on."""
+    try:
+        return bool(json.loads(STATE_FILE.read_text(encoding="utf-8")).get("lights_on", True))
+    except (OSError, ValueError):
+        return True
+
+
+def save_lights_state(on: bool) -> None:
+    try:
+        STATE_FILE.write_text(json.dumps({"lights_on": on}), encoding="utf-8")
+    except OSError as e:
+        print(f"could not save on/off state: {e}")
 
 
 def merged(base: dict, override: dict) -> dict:
@@ -156,19 +173,16 @@ def _run(args, persist: dict, cleanup: list) -> None:
 
     apply(None)
 
-    # On/off: start OFF. "Content" = a full-screen game or full-screen video, debounced: it starts
-    # immediately but only ENDS after off_delay_s without it (so a short alt-tab is not an end).
-    #   content starts -> LEDs on      content ends -> LEDs off      hotkey -> toggle any time
-    # Edges only: turning off mid-game sticks; turning on manually on the desktop sticks.
+    # On/off: ONLY the hotkey (user's choice: automatic on/off was annoying). The state is saved
+    # to state.json, so a reboot restores what you chose last (first run: on). Activity detection
+    # only selects the settings profile; it never switches the LEDs.
     lock = threading.Lock()
-    # After a supervisor restart, keep the previous on/off state and content tracking.
-    state = {"lights_on": persist.get("lights_on", activity is None)}  # no detection -> start on
-    content = persist.get("content", False)
-    content_lost_at: float | None = None
+    state = {"lights_on": persist.get("lights_on", load_lights_state())}
 
     def on_hotkey() -> None:
         with lock:
             state["lights_on"] = not state["lights_on"]
+            save_lights_state(state["lights_on"])
         print(f"hotkey: LEDs {'on' if state['lights_on'] else 'off'}")
 
     hotkey = Hotkey(act_cfg.get("hotkey", "ctrl+alt+l"), on_hotkey)
@@ -212,29 +226,13 @@ def _run(args, persist: dict, cleanup: list) -> None:
 
                 # --- what should the LEDs do? -------------------------------------------------
                 mode = activity.mode if activity else "video"
-                if activity:
-                    if activity.autostart:
-                        content_lost_at = None
-                        if not content:
-                            content = True
-                            with lock:
-                                state["lights_on"] = True
-                            print(f"auto-on: full-screen {mode} ({activity.detail})")
-                    elif content:
-                        content_lost_at = content_lost_at or t_loop
-                        delay = base_cfg.get("activity", {}).get("off_delay_s", 5)
-                        if t_loop - content_lost_at >= delay:
-                            content, content_lost_at = False, None
-                            with lock:
-                                state["lights_on"] = False
-                            print(f"auto-off: no full-screen game/video for {delay} s")
                 if mode != last_mode:
                     print(f"activity: {mode} ({activity.detail if activity else 'detection off'})")
                     last_mode = mode
                     apply(mode if mode in ("game", "video") else None)
                 with lock:
                     lights = state["lights_on"]
-                persist["lights_on"], persist["content"] = lights, content
+                persist["lights_on"] = lights
                 if sender.error:                         # USB failed: let the supervisor restart
                     raise RuntimeError(f"LED strip write failed: {sender.error}")
 

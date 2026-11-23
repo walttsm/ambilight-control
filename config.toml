@@ -61,12 +61,11 @@ keepalive_hz = 5       # when the screen is static, resend this often so the fir
 send_threshold = 1     # skip a USB send unless some channel changed by MORE than this (0..255 steps)
 
 [activity]
-# Detects game / video / desktop to pick the settings profile below.
-# LEDs start OFF, turn ON when a full-screen game or full-screen video starts (not for media in a
-# window or background tab), and turn OFF when there has been none for off_delay_s.
-enabled = true         # false = no detection: LEDs start on, always the base settings
-off_delay_s = 120      # seconds without a full-screen game/video before auto-off (alt-tab safe)
-hotkey = "ctrl+alt+l"  # toggles the LEDs on/off at any time (e.g. on for the desktop)
+# LEDs on/off: ONLY the hotkey. The last state is restored at startup (saved in state.json).
+# Detection of game / video / desktop only picks the settings profile below; it never switches
+# the LEDs on or off.
+enabled = true         # false = no detection: always the base settings
+hotkey = "ctrl+alt+l"  # toggles the LEDs on/off
 # Full-screen apps that are video, not games:
 video_players = ["vlc.exe", "mpv.exe", "mpc-hc64.exe", "mpc-be64.exe", "PotPlayerMini64.exe",
                  "Video.UI.exe", "Microsoft.Media.Player.exe"]

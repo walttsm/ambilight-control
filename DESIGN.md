@@ -141,12 +141,11 @@ Applied after gamma (current ∝ byte value), and **again inside `Strip.send()` 
 caller (test tools included) can exceed the budget. Floor, never round up.
 
 ### 3.6 Activity, profiles, hotkey: `ambilight/activity.py`, `ambilight/hotkey.py`
-**On/off (user's choice): start OFF; "content" = full-screen game or full-screen video, debounced
-(starts immediately, ends only after `off_delay_s` = 120 s without it). Content starts → ON,
-content ends → OFF, hotkey toggles any time.** Edge-triggered: switching off mid-game sticks,
-switching on manually on the desktop sticks, a break < 120 s is neither an end nor a new start. Media in a window/background tab is
-"video" for profile purposes but never triggers auto-on (unreliable: background music, previews).
-Activity detection also selects the settings profile. Polled once per second on a background thread:
+**On/off (user's final choice): ONLY the hotkey.** The last state is saved to `state.json` and
+restored at startup (first run: on). Activity detection never switches the LEDs; it only selects
+the settings profile. (History: auto-on for full-screen game/video plus auto-off after a delay was
+built and tried through several variants, and the user found it annoying. Don't re-add it.)
+Polled once per second on a background thread:
 * `SHQueryUserNotificationState`: 3 = exclusive full-screen D3D, 2 = BUSY (borderless full
   screen), 7 = store app full screen. (Maximized normal windows report 5, so they don't count.)
 * Foreground window → process name (`QueryFullProcessImageNameW`) and whether its center is on
@@ -161,7 +160,8 @@ Activity detection also selects the settings profile. Polled once per second on 
 * `[profiles.game]` / `[profiles.video]` deep-merge over the base config (game: bars off,
   40 ms smoothing; video: bars on, 100 ms).
 * Hotkey: `RegisterHotKey` + a `GetMessageW` loop on its own thread (WM_HOTKEY); toggles a
-  simple `lights_on` flag.
+  simple `lights_on` flag and persists it (`state.json`, git-ignored). A supervisor restart keeps
+  the in-memory state too.
 * DRM: `DXGI_OUTDUPL_FRAME_INFO.ProtectedContentMaskedOut` → hold the last colors.
 
 ### 3.7 Running unattended (autostart)
